@@ -101,6 +101,7 @@ body {
   line-height: 20px;
   text-align: center;
   width: 35px;
+  font-family: "Consolas", monospace;
 }
 
 /* The colors are from https://www.schemecolor.com/rainbow-pastels-color-scheme.php */
