@@ -27,7 +27,7 @@ export default function parseCreateTableStatement(sql, checkName) {
         }
 
         if (sql.substring(index, index + 'CREATE'.length) !== 'CREATE') {
-          throw new Error(makeErrorMessage('CREATE', sql, index, newlines));
+          throw new Error(makeErrorMessage(state, 'CREATE', sql, index, newlines));
         }
 
         index += 'CREATE'.length;
@@ -42,7 +42,7 @@ export default function parseCreateTableStatement(sql, checkName) {
         }
 
         if (sql.substring(index, index + 'TABLE'.length) !== 'TABLE') {
-          throw new Error(makeErrorMessage('TABLE', sql, index, newlines));
+          throw new Error(makeErrorMessage(state, 'TABLE', sql, index, newlines));
         }
 
         index += 'TABLE'.length;
@@ -56,7 +56,7 @@ export default function parseCreateTableStatement(sql, checkName) {
             index++;
             break;
           } else if (tableName !== checkName) {
-            throw new Error(makeErrorMessage('table name ' + checkName, sql, index, newlines));
+            throw new Error(makeErrorMessage(state, 'table name ' + checkName, sql, index, newlines));
           } else {
             index++;
             state = 'columns-opening-parenthesis';
@@ -66,7 +66,7 @@ export default function parseCreateTableStatement(sql, checkName) {
 
         if (sql[index] === '[') {
           if (tableNameQuoted) {
-            throw new Error(makeErrorMessage('quoted table name or ]', sql, index, newlines));
+            throw new Error(makeErrorMessage(state, 'quoted table name or ]', sql, index, newlines));
           } else {
             tableNameQuoted = true;
             index++;
@@ -77,21 +77,31 @@ export default function parseCreateTableStatement(sql, checkName) {
         if (sql[index] === ']') {
           if (tableNameQuoted) {
             if (tableName === '') {
-              throw new Error(makeErrorMessage('quoted table name', sql, index, newlines));
+              throw new Error(makeErrorMessage(state, 'quoted table name', sql, index, newlines));
             } else if (tableName !== checkName) {
-              throw new Error(makeErrorMessage('table name ' + checkName, tableName, index, newlines));
+              throw new Error(makeErrorMessage(state, 'table name ' + checkName, tableName, index, newlines));
             } else {
               index++;
               state = 'columns-opening-parenthesis';
               break;
             }
           } else {
-            throw new Error(makeErrorMessage('unquoted table name', sql, index, newlines));
+            throw new Error(makeErrorMessage(state, 'unquoted table name', sql, index, newlines));
           }
         }
 
+        if (sql[index] === '(') {
+          if (tableName.length === 0) {
+            throw new Error(makeErrorMessage(state, 'no table name', sql, index, newlines));
+          }
+          // index++;
+          state = 'columns-opening-parenthesis';
+          break;
+        }
+
         if ((sql[index] < 'A' || sql[index] > 'Z') && (sql[index] < 'a' || sql[index] > 'z') && sql[index] !== '_') {
-          throw new Error(makeErrorMessage('valid table name identifier character', sql, index, newlines));
+          console.log('Table name at this point:', `"${tableName}"`, `"${checkName}"`, tableName !== checkName)
+          throw new Error(makeErrorMessage(state, 'valid table name identifier character', sql, index, newlines));
         }
 
         tableName += sql[index];
@@ -106,7 +116,7 @@ export default function parseCreateTableStatement(sql, checkName) {
         }
 
         if (sql[index] !== '(') {
-          throw new Error(makeErrorMessage('(', sql, index, newlines));
+          throw new Error(makeErrorMessage(state, '(', sql, index, newlines));
         }
 
         state = 'column-name';
@@ -141,7 +151,7 @@ export default function parseCreateTableStatement(sql, checkName) {
 
         if (sql[index] === '[') {
           if (columnName) {
-            throw new Error(makeErrorMessage('quoted column name or ]', sql, index, newlines));
+            throw new Error(makeErrorMessage(state, 'quoted column name or ]', sql, index, newlines));
           } else {
             columnNameQuoted = true;
             index++;
@@ -152,7 +162,7 @@ export default function parseCreateTableStatement(sql, checkName) {
         if (sql[index] === ']') {
           if (columnNameQuoted) {
             if (columnName === '') {
-              throw new Error(makeErrorMessage('quoted column name', sql, index, newlines));
+              throw new Error(makeErrorMessage(state, 'quoted column name', sql, index, newlines));
             } else {
               index++;
               state = 'column-data-type';
@@ -162,12 +172,12 @@ export default function parseCreateTableStatement(sql, checkName) {
               break;
             }
           } else {
-            throw new Error(makeErrorMessage('unquoted column name', sql, index, newlines));
+            throw new Error(makeErrorMessage(state, 'unquoted column name', sql, index, newlines));
           }
         }
 
         if ((sql[index] < 'A' || sql[index] > 'Z') && (sql[index] < 'a' || sql[index] > 'z') && sql[index] !== '_') {
-          throw new Error(makeErrorMessage('valid column name identifier character', sql, index, newlines));
+          throw new Error(makeErrorMessage(state, 'valid column name identifier character', sql, index, newlines));
         }
 
         columnName += sql[index];
@@ -284,7 +294,7 @@ export default function parseCreateTableStatement(sql, checkName) {
           break;
         }
 
-        throw new Error(makeErrorMessage('TEXT, DATETIME, DOUBLE, INTEGER, TINYINT, BLOB, NVARCHAR, NUMERIC', sql, index, newlines));
+        throw new Error(makeErrorMessage(state, 'TEXT, DATETIME, DOUBLE, INTEGER, TINYINT, BLOB, NVARCHAR, NUMERIC', sql, index, newlines));
       }
       case 'column-constraints': {
         // Ignore leading whitespace
@@ -346,7 +356,7 @@ export default function parseCreateTableStatement(sql, checkName) {
           break;
         }
 
-        throw new Error(makeErrorMessage('NOT NULL, PRIMARY KEY, UNIQUE', sql, index, newlines));
+        throw new Error(makeErrorMessage(state, 'NOT NULL, PRIMARY KEY, UNIQUE', sql, index, newlines));
       }
       case 'column-constraint-DEFAULT': {
         // Ignore leading whitespace
@@ -391,7 +401,12 @@ export default function parseCreateTableStatement(sql, checkName) {
           break;
         }
 
-        throw new Error(makeErrorMessage('empty quotes', sql, index, newlines));
+        // console.log('Setting column default contraint name. Before:', columnConstraintName)
+        columnConstraintName += sql[index];
+        index++;
+        break;
+
+        // throw new Error(makeErrorMessage(state, 'empty quotes', sql, index, newlines));
       }
       case 'column-constraint-CONSTRAINT': {
         // Ignore leading whitespace
@@ -429,7 +444,7 @@ export default function parseCreateTableStatement(sql, checkName) {
 
         if (sql[index] === '[') {
           if (columnConstraintNameQuoted) {
-            throw new Error(makeErrorMessage('quoted column constraint name or ]', sql, index, newlines));
+            throw new Error(makeErrorMessage(state, 'quoted column constraint name or ]', sql, index, newlines));
           } else {
             columnConstraintNameQuoted = true;
             index++;
@@ -440,7 +455,7 @@ export default function parseCreateTableStatement(sql, checkName) {
         if (sql[index] === ']') {
           if (columnConstraintNameQuoted) {
             if (columnConstraintName === '') {
-              throw new Error(makeErrorMessage('quoted column constraint name', sql, index, newlines));
+              throw new Error(makeErrorMessage(state, 'quoted column constraint name', sql, index, newlines));
             } else {
               index++;
               columnConstraintName = '';
@@ -449,12 +464,12 @@ export default function parseCreateTableStatement(sql, checkName) {
               break;
             }
           } else {
-            throw new Error(makeErrorMessage('unquoted column constraint name', sql, index, newlines));
+            throw new Error(makeErrorMessage(state, 'unquoted column constraint name', sql, index, newlines));
           }
         }
 
         if ((sql[index] < 'A' || sql[index] > 'Z') && (sql[index] < 'a' || sql[index] > 'z') && sql[index] !== '_') {
-          throw new Error(makeErrorMessage('valid column constraing name identifier character', sql, index, newlines));
+          throw new Error(makeErrorMessage(state, 'valid column constraing name identifier character', sql, index, newlines));
         }
 
         columnConstraintName += sql[index];
@@ -557,11 +572,11 @@ export default function parseCreateTableStatement(sql, checkName) {
           break;
         }
 
-        throw new Error(makeErrorMessage('FOREIGN KEY', sql, index, newlines));
+        throw new Error(makeErrorMessage(state, 'FOREIGN KEY', sql, index, newlines));
       }
       case 'columns-closing-parenthesis': {
         if (sql[index] !== ')') {
-          throw new Error(makeErrorMessage(')', sql, index, newlines));
+          throw new Error(makeErrorMessage(state, ')', sql, index, newlines));
         }
 
         index++;
@@ -584,6 +599,16 @@ export default function parseCreateTableStatement(sql, checkName) {
   return columnNames.map((name, index) => ({ name, type: columnTypes[index] }));
 }
 
-function makeErrorMessage(expected, sql, index, newlines) {
-  return `Expected "${expected}" but got "${sql.substring(index, index + expected.length)}" at position ${index} (line ${newlines.length + 1}, character ${newlines.length > 0 ? (index - newlines[newlines.length - 1]) : index})\n\n${sql}`;
+/**
+ * Utility function for making readable Exception messages
+ * 
+ * @param {*} state
+ * @param {*} expected
+ * @param {*} sql
+ * @param {*} index
+ * @param {*} newlines 
+ * @returns 
+ */
+function makeErrorMessage(state, expected, sql, index, newlines) {
+  return `Expected "${expected}" in current state "${state}" but got "${sql.substring(index, index + expected.length)}" at position ${index} (line ${newlines.length + 1}, character ${newlines.length > 0 ? (index - newlines[newlines.length - 1]) : index})\n\n${sql}`;
 }
